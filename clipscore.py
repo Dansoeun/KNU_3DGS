@@ -91,7 +91,7 @@ def get_clip_score(model, images, captions, device, w=2.5):
 
 def get_clip_score(model, images, captions, device, w=2.5):
     """
-    Improved CLIPScore calculation using CLIP's native similarity scoring
+    Improved CLIPScore calculation with Softmax conversion
     
     Args:
         model: CLIP model
@@ -101,7 +101,7 @@ def get_clip_score(model, images, captions, device, w=2.5):
         w: Scaling factor (default 2.5 as in original CLIPScore paper)
     
     Returns:
-        Tuple of (mean_score, per_instance_scores)
+        Tuple of (mean_softmax_score, softmax_per_instance_scores)
     """
     # Handle empty captions
     if not captions or len(captions) == 0:
@@ -120,7 +120,7 @@ def get_clip_score(model, images, captions, device, w=2.5):
         # Normalize text features
         text_features /= text_features.norm(dim=-1, keepdim=True)
         
-        # Compute similarities
+        # Compute similarities and apply CLIPScore
         similarities = []
         for img_feature, caption in zip(images, captions):
             # Normalize image features
@@ -133,7 +133,13 @@ def get_clip_score(model, images, captions, device, w=2.5):
             clip_score = w * 100 * similarity.mean().item()
             similarities.append(clip_score)
         
-        # Compute mean score, handling potential NaN values
-        mean_score = np.nanmean(similarities) if len(similarities) > 0 else 0
+        # Convert to numpy array for softmax
+        clip_scores = np.array(similarities)
+        
+        # Apply softmax to convert scores to probabilities
+        softmax_scores = torch.nn.functional.softmax(torch.tensor(clip_scores), dim=0).numpy()
+        
+        # Compute mean softmax score, handling potential NaN values
+        mean_softmax_score = np.nanmean(softmax_scores) if len(softmax_scores) > 0 else 0
     
-    return mean_score, similarities
+    return mean_softmax_score, softmax_scores.tolist()
